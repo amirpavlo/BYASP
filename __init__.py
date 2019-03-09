@@ -53,7 +53,7 @@ def register():
 
     bpy.types.Scene.yasp_phoneme_rig = StringProperty(
         name="Phoneme Rig Name",
-        subtype='FILE_PATH',
+        subtype='FILE_NAME',
         default='',
         description='name of phoneme rig')
 

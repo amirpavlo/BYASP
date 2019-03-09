@@ -9,6 +9,7 @@ import ctypes
 import sys
 import platform
 import random
+import math
 from bpy.props import EnumProperty, StringProperty, BoolVectorProperty
 
 random.seed(23483)
@@ -172,22 +173,43 @@ class Bone(object):
         key_list = list(self.animation_data.keys())
         value_list = list(self.animation_data.values())
         num_kf = len(key_list)
+        window_left = int(math.floor(float(window_size)/float(2)))
+        window_right = int(math.ceil(float(window_size)/float(2)))
         i = 0
         # this is a float for upper/lower calculations just convert it to
         # an int
-        wsi = int(window_size)
+        print(key_list)
         for k in key_list:
-            upper = min(num_kf - 1, i + wsi)
-            lower = min(i, i - wsi)
-            lower = max(i, lower)
+            fupper = k + window_right
+            flower = max(0, k - window_left)
+            upper = 0
+            lower = 0
+            # find the largest key frame that would be smaller than upper
+            for j in range(i, num_kf):
+                if key_list[j] < fupper:
+                    upper = j
+                else:
+                    break
+            for j in range(0, i):
+                if key_list[j] < flower:
+                    lower = j
+                else:
+                    break
+            if key_list[upper] - k > window_right:
+                 upper = i
+            if k - key_list[lower] > window_left:
+                 lower = i
             total_value = 0
             for j in range(lower, upper):
                 total_value = total_value + value_list[j]
             # use the float value to calculate the avg
-            avg = total_value / window_size
-            # don't drop the key frame value more than a 1/3 of its
-            # original value
-            avg = max(self.animation_data[k] - self.animation_data[k]/3, avg)
+            if (upper > lower):
+                avg = total_value / (upper - lower)
+                # don't drop the key frame value more than a 1/3 of its
+                # original value
+                avg = max(self.animation_data[k] - self.animation_data[k]/3, avg)
+            else:
+                avg = self.animation_data[k]
             self.animation_data[k] = avg
             i = i + 1
 
