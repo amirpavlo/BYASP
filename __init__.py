@@ -21,8 +21,9 @@
 
 import bpy
 import traceback
-from bpy.props import EnumProperty, StringProperty, BoolVectorProperty
+from bpy.props import EnumProperty, StringProperty, BoolVectorProperty, IntProperty
 from . import byasp
+from . import bface
 
 bl_info = {
     "name": "YASP",
@@ -45,11 +46,27 @@ classes = (
     byasp.YASP_OT_setallKeyframes,
     byasp.YASP_OT_deleteallKeyframes,
     byasp.YASP_OT_delete_seq,
+    bface.VIEW3D_PT_tools_openface,
+    bface.FACE_OT_animate,
 )
 
 def register():
     for cls in classes:
         bpy.utils.register_class(cls)
+
+    bpy.types.Scene.yasp_videofile = StringProperty(
+        name="Path to video face reference",
+        subtype='FILE_PATH',
+        default='',
+        description='path to video face reference')
+
+    bpy.types.Scene.yasp_openface_ws = IntProperty(
+        name="Window Size",
+        description='Smoothing Window Size')
+
+    bpy.types.Scene.yasp_openface_polyorder = IntProperty(
+        name="Polynomial Order",
+        description='Polynomial order. Should be less than window size')
 
     bpy.types.Scene.yasp_phoneme_rig = StringProperty(
         name="Phoneme Rig Name",
@@ -69,16 +86,12 @@ def register():
         default='',
         description='Path to transcript file')
 
-    bpy.types.Scene.yasp_start_frame = StringProperty(
+    bpy.types.Scene.yasp_start_frame = IntProperty(
         name="Start frame",
-        subtype='FILE_NAME',
-        default='',
         description='Start audio on specified frame')
 
-    bpy.types.Scene.yasp_avg_window_size = StringProperty(
+    bpy.types.Scene.yasp_avg_window_size = IntProperty(
         name="Avg Window",
-        subtype='FILE_NAME',
-        default='0',
         description='Average keyframe values within the window')
 
 def unregister():
