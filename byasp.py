@@ -46,7 +46,7 @@ def yasp_load_dep():
         pocketsphinxlib = ctypes.cdll.LoadLibrary(os.path.abspath(pocketsphinx))
         yasplib = ctypes.cdll.LoadLibrary(os.path.abspath(yasp))
     except Exception as e:
-        print(e)
+        logger.critical(e)
         logger.critical("Failed to load libraries")
         libs_loaded = False
 
@@ -178,7 +178,6 @@ class Bone(object):
         i = 0
         # this is a float for upper/lower calculations just convert it to
         # an int
-        print(key_list)
         for k in key_list:
             fupper = k + window_right
             flower = max(0, k - window_left)
