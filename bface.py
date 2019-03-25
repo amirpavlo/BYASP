@@ -42,9 +42,58 @@ class FACE_OT_animate(bpy.types.Operator):
                             stdout=subprocess.PIPE)
         return rc.returncode, rc.stdout.decode(), outdir
 
-    def animate_face(self, animation_data):
-        print('animate face')
-        return
+    def set_keyframes(self, result, array, slider_obj, intensity):
+        print("-----------------")
+        for m in array:
+            print("frame:", m, "result:", result[m])
+            if not 'GZ' in slider_obj.name:
+                value = (result[m] / 5) * 0.377
+            else:
+                value = result[m]
+            if intensity > 0:
+                value = value + (value * (intensity/100))
+            slider_obj.location[0] = value
+            if not 'GZ' in slider_obj.name:
+                slider_obj.keyframe_insert(data_path="location", frame=m, index=0)
+        print("-----------------")
+
+    def set_every_keyframe(self, result, slider_obj, intensity):
+        frame = 1
+        for m in result:
+            if not 'GZ' in slider_obj.name:
+                value = (m / 5) * 0.377
+            else:
+                value = m
+            if intensity > 0:
+                value = value + (value * (intensity/100))
+            slider_obj.location[0] = value
+            if not 'GZ' in slider_obj.name:
+                slider_obj.keyframe_insert(data_path="location", frame=frame, index=0)
+            frame = frame + 1
+
+    def animate_face(self, animation_data, intensity):
+        for key, value in animation_data.items():
+            slider_name = ''
+            if 'AU' in key:
+                slider_name = 'facs_rig_slider_' + key.strip('_r')
+            elif key == 'gaze_angle_x':
+                slider_name = 'facs_rig_slider_GZ0H'
+            elif key == 'gaze_angle_y':
+                slider_name = 'facs_rig_slider_GZ0V'
+            else:
+                continue
+            slider_obj = bpy.data.objects[slider_name]
+            if not slider_obj:
+                logger.critical('slider %s not found', slider_name)
+                continue
+
+            result = value[0]
+            maximas = value[1]
+            minimas = value[2]
+
+            self.set_keyframes(result, maximas, slider_obj, intensity)
+            self.set_keyframes(result, minimas, slider_obj, intensity)
+            #self.set_every_keyframe(result, slider_obj, intensity)
 
     def execute(self, context):
         scn = context.scene
@@ -53,6 +102,7 @@ class FACE_OT_animate(bpy.types.Operator):
         video = scn.yasp_videofile
         ws = scn.yasp_openface_ws
         po = scn.yasp_openface_polyorder
+        intensity = scn.yasp_openface_intensity_percentage
 
         if po >= ws:
             msg = "polyorder must be less than window_length."
@@ -85,6 +135,7 @@ class FACE_OT_animate(bpy.types.Operator):
         # process the csv file
         csv = os.path.join(outdir,
             os.path.splitext(os.path.basename(video))[0]+'.csv')
+        print(csv)
         if not os.path.isfile(csv):
             msg = "Failed to process video. No csv file found: "+csv
             self.report({'ERROR'}, msg)
@@ -103,7 +154,7 @@ class FACE_OT_animate(bpy.types.Operator):
             return {'FINISHED'}
 
         # animate the data
-        self.animate_face(animation_data)
+        self.animate_face(animation_data, intensity)
 
         return {'FINISHED'}
 
@@ -125,6 +176,8 @@ class VIEW3D_PT_tools_openface(bpy.types.Panel):
         col.prop(scn, "yasp_openface_ws", text='')
         col.label(text="Polynomial Order")
         col.prop(scn, "yasp_openface_polyorder", text='')
+        col.label(text="Animation Intensity")
+        col.prop(scn, "yasp_openface_intensity_percentage", text='')
         col = layout.column(align=False)
         col.operator('yafr.animate_face', icon='ANIM_DATA')
 

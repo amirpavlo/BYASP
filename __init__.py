@@ -68,6 +68,10 @@ def register():
         name="Polynomial Order",
         description='Polynomial order. Should be less than window size')
 
+    bpy.types.Scene.yasp_openface_intensity_percentage = IntProperty(
+        name="Animation Intensity",
+        description='Increase intensity of animation by percentage')
+
     bpy.types.Scene.yasp_phoneme_rig = StringProperty(
         name="Phoneme Rig Name",
         subtype='FILE_NAME',
