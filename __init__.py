@@ -21,7 +21,7 @@
 
 import bpy
 import traceback
-from bpy.props import EnumProperty, StringProperty, BoolVectorProperty, IntProperty
+from bpy.props import EnumProperty, StringProperty, BoolVectorProperty, IntProperty, FloatProperty
 from . import byasp
 from . import bface
 
@@ -48,29 +48,45 @@ classes = (
     byasp.YASP_OT_delete_seq,
     bface.VIEW3D_PT_tools_openface,
     bface.FACE_OT_animate,
+    bface.FACE_OT_clear_animation,
 )
 
 def register():
     for cls in classes:
         bpy.utils.register_class(cls)
 
-    bpy.types.Scene.yasp_videofile = StringProperty(
+    bpy.types.Scene.yafr_videofile = StringProperty(
         name="Path to video face reference",
         subtype='FILE_PATH',
         default='',
         description='path to video face reference')
 
-    bpy.types.Scene.yasp_openface_ws = IntProperty(
+    bpy.types.Scene.yafr_csvfile = StringProperty(
+        name="Path to facs file",
+        subtype='FILE_PATH',
+        default='',
+        description='path to FACS .csv file')
+
+    bpy.types.Scene.yafr_openface_ws = IntProperty(
         name="Window Size",
+        default = 1,
         description='Smoothing Window Size')
 
-    bpy.types.Scene.yasp_openface_polyorder = IntProperty(
+    bpy.types.Scene.yafr_openface_polyorder = IntProperty(
         name="Polynomial Order",
         description='Polynomial order. Should be less than window size')
 
-    bpy.types.Scene.yasp_openface_intensity_percentage = IntProperty(
+    bpy.types.Scene.yafr_openface_au_intensity = FloatProperty(
         name="Animation Intensity",
-        description='Increase intensity of animation by percentage')
+        description='Increase intensity of animation by factor')
+
+    bpy.types.Scene.yafr_openface_vgaze_intensity = FloatProperty(
+        name="Vertical Gaze Intensity",
+        description='Increase intensity of vertical gaze by factor')
+
+    bpy.types.Scene.yafr_openface_hgaze_intensity = FloatProperty(
+        name="Horizontal Gaze Intensity",
+        description='Increase intensity of horizontal gaze by factor')
 
     bpy.types.Scene.yasp_phoneme_rig = StringProperty(
         name="Phoneme Rig Name",

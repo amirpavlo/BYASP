@@ -32,7 +32,14 @@ def smooth_array(ar, window_size, polyorder):
 
     return result, maximas.tolist(), minimas.tolist()
 
-def plot_graph(name):
+def reset_database():
+    global animation_data
+
+    for k, v in animation_data.items():
+        for i in range(0, 3):
+            v[i].clear()
+
+def plot_graph(animation_data, name, show=True, pdf_path=''):
     # plot the first entry
     plt.plot(animation_data['frame'][0], animation_data[name][0], label=name)
 
@@ -42,9 +49,16 @@ def plot_graph(name):
         plt.plot(maxima, animation_data[name][0][maxima], marker="o")
 
     plt.legend()
-    plt.show()
+    if show:
+        plt.show()
+    elif pdf_path:
+        f = plt.figure()
+        f.savefig(pdf_path, bbox_inches='tight')
 
 def process_facs_csv(csv_name, window_size = 5, polyorder = 2):
+    global animation_data
+
+    print(animation_data)
     with open(csv_name, 'r') as fcsv:
         reader = csv.DictReader(fcsv, delimiter=',')
         reader = (dict((k.strip(), v.strip()) for k, v in row.items() if v) \
@@ -66,7 +80,7 @@ def process_facs_csv(csv_name, window_size = 5, polyorder = 2):
         # export data to JSON
         js = json.dumps(animation_data, indent=4)
 
-        return js, animation_data
+    return js, animation_data
 
 if __name__ == '__main__':
     if len(sys.argv) < 2:
@@ -86,4 +100,4 @@ if __name__ == '__main__':
         jf.write(js)
         jf.close()
 
-    plot_graph('AU04_r')
+    plot_graph(ad, 'AU04_r')
