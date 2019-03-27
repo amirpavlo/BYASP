@@ -58,7 +58,6 @@ def plot_graph(animation_data, name, show=True, pdf_path=''):
 def process_facs_csv(csv_name, window_size = 5, polyorder = 2):
     global animation_data
 
-    print(animation_data)
     with open(csv_name, 'r') as fcsv:
         reader = csv.DictReader(fcsv, delimiter=',')
         reader = (dict((k.strip(), v.strip()) for k, v in row.items() if v) \

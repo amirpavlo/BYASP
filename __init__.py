@@ -21,7 +21,7 @@
 
 import bpy
 import traceback
-from bpy.props import EnumProperty, StringProperty, BoolVectorProperty, IntProperty, FloatProperty
+from bpy.props import EnumProperty, StringProperty, BoolProperty, IntProperty, FloatProperty
 from . import byasp
 from . import bface
 
@@ -88,6 +88,11 @@ def register():
         name="Horizontal Gaze Intensity",
         description='Increase intensity of horizontal gaze by factor')
 
+    bpy.types.Scene.yafr_openface_mouth = BoolProperty(
+        name="Enable Mouth",
+        description="Enable mouth animation",
+        default=True)
+
     bpy.types.Scene.yasp_phoneme_rig = StringProperty(
         name="Phoneme Rig Name",
         subtype='FILE_NAME',
@@ -113,6 +118,8 @@ def register():
     bpy.types.Scene.yasp_avg_window_size = IntProperty(
         name="Avg Window",
         description='Average keyframe values within the window')
+
+    bface.set_init_state(True)
 
 def unregister():
     for cls in reversed(classes):

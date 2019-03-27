@@ -20,6 +20,12 @@ logger = logging.getLogger(__name__)
 # Global sliders
 global_sliders_set = False
 global_sliders = {}
+init_state = False
+
+def set_init_state(state):
+    global init_state
+
+    init_state = state
 
 class FACE_OT_clear_animation(bpy.types.Operator):
     bl_idname = "yafr.del_animation"
@@ -29,14 +35,26 @@ class FACE_OT_clear_animation(bpy.types.Operator):
     def execute(self, context):
         global global_sliders_set
         global global_sliders
+        global init_state
 
-        if global_sliders_set:
+        # if we start a new instance of blender our global_slider_set and
+        # global_sliders are not set. We'll settle for going through all
+        # the sliders and clearing up the animation. I'm still not sure if
+        # we really need to delete each frame
+        if init_state:
+            for obj in bpy.data.objects:
+                if 'facs_rig_slider_' in obj.name:
+                    obj.animation_data_clear()
+        elif global_sliders_set:
             for slider, value in global_sliders.items():
                 obj = bpy.data.objects.get(slider)
                 if not obj:
                     continue
                 for f in value:
-                    obj.keyframe_delete(data_path="location", frame=f, index=0)
+                    try:
+                        obj.keyframe_delete(data_path="location", frame=f, index=0)
+                    except:
+                        continue
                 obj.animation_data_clear()
 
         global_sliders_set = False
@@ -111,14 +129,20 @@ class FACE_OT_animate(bpy.types.Operator):
                 slider_obj.keyframe_insert(data_path="location", frame=frame, index=0)
             frame = frame + 1
 
-    def animate_face(self, animation_data, intensity, vgi, hgi):
+    def animate_face(self, mouth, animation_data, intensity, vgi, hgi):
         global global_sliders_set
 
         # animation already done
         if global_sliders_set:
             return
 
+        mouth_aus = ['AU10', 'AU12', 'AU13', 'AU14', 'AU15', 'AU16', 'AU17', 'AU20', 'AU23']
+
         for key, value in animation_data.items():
+            # don't use specific AUs if mouth is not selected
+            if key.strip('_r') in mouth_aus and not mouth:
+                continue
+
             slider_name = ''
             if 'AU' in key:
                 slider_name = 'facs_rig_slider_' + key.strip('_r')
@@ -167,6 +191,8 @@ class FACE_OT_animate(bpy.types.Operator):
     def execute(self, context):
         global global_sliders_set
 
+        set_init_state(False)
+
         scn = context.scene
         dirname = os.path.dirname(os.path.realpath(__file__))
         openface = os.path.join(dirname, "openface", "FeatureExtraction")
@@ -177,6 +203,7 @@ class FACE_OT_animate(bpy.types.Operator):
         intensity = scn.yafr_openface_au_intensity
         hgi = scn.yafr_openface_hgaze_intensity
         vgi = scn.yafr_openface_vgaze_intensity
+        mouth = scn.yafr_openface_mouth
 
         if global_sliders_set:
             self.report({'ERROR'}, "Delete current animation first")
@@ -205,7 +232,7 @@ class FACE_OT_animate(bpy.types.Operator):
             animation_data = self.process_csv_file(csv, ws, po)
             # animate the data
             if animation_data:
-                self.animate_face(animation_data, intensity, vgi, hgi)
+                self.animate_face(mouth, animation_data, intensity, vgi, hgi)
                 return {'FINISHED'}
 
             msg = "failed to animate face"
@@ -247,7 +274,7 @@ class FACE_OT_animate(bpy.types.Operator):
         animation_data = self.process_csv_file(csv, ws, po)
         # animate the data
         if animation_data:
-            self.animate_face(animation_data, intensity, vgi, hgi)
+            self.animate_face(mouth, animation_data, intensity, vgi, hgi)
             return {'FINISHED'}
 
         msg = "failed to animate face"
@@ -281,6 +308,7 @@ class VIEW3D_PT_tools_openface(bpy.types.Panel):
         col.prop(scn, "yafr_openface_vgaze_intensity", text='')
         col.label(text="Horizontal Gaze Intensity")
         col.prop(scn, "yafr_openface_hgaze_intensity", text='')
+        col.prop(scn, "yafr_openface_mouth", text='Mouth Animation')
         col = layout.column(align=False)
         col.operator('yafr.animate_face', icon='ANIM_DATA')
         col = layout.column(align=False)
