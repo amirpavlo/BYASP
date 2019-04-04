@@ -37,30 +37,24 @@ class FACE_OT_clear_animation(bpy.types.Operator):
         global global_sliders
         global init_state
 
-        # if we start a new instance of blender our global_slider_set and
-        # global_sliders are not set. We'll settle for going through all
-        # the sliders and clearing up the animation. I'm still not sure if
-        # we really need to delete each frame
-        if init_state:
-            for obj in bpy.data.objects:
-                if 'facs_rig_slider_' in obj.name:
-                    obj.animation_data_clear()
-        elif global_sliders_set:
-            for slider, value in global_sliders.items():
-                obj = bpy.data.objects.get(slider)
-                if not obj:
-                    continue
-                for f in value:
-                    try:
-                        obj.keyframe_delete(data_path="location", frame=f, index=0)
-                    except:
-                        continue
+        for obj in bpy.data.objects:
+            if 'facs_rig_slider_' in obj.name:
                 obj.animation_data_clear()
+        obj = get_mb_rig()
+        if obj:
+            obj.animation_data_clear()
 
         global_sliders_set = False
         global_sliders = {}
         facs.reset_database()
         return {'FINISHED'}
+
+def get_mb_rig():
+    rig_names = ['MBLab_skeleton_muscle_ik', 'MBLab_skeleton_base_ik', 'MBLab_skeleton_muscle_fk', 'MBLab_skeleton_base_fk']
+    for obj in bpy.data.objects:
+        if obj.type == 'ARMATURE' and obj.data.name in rig_names:
+            return obj
+    return None
 
 class FACE_OT_animate(bpy.types.Operator):
     bl_idname = "yafr.animate_face"
@@ -76,6 +70,32 @@ class FACE_OT_animate(bpy.types.Operator):
                             stdout=subprocess.PIPE)
         return rc.returncode, rc.stdout.decode(), outdir
 
+    def set_keyframes_hr(self, result, array, attr, head_bone, intensity):
+        rotation = {'Rx': 1, 'Ry': 2, 'Rz': 3}
+
+        for m in array:
+            # angle in radians
+            val = result[m] + (result[m] * intensity)
+            head_bone.rotation_quaternion[rotation[attr]] = val
+            print(attr, ":", m, ":",  rotation[attr], ":", val)
+            head_bone.keyframe_insert('rotation_quaternion', index=rotation[attr], frame=m)
+
+    def get_head_bone(self, mb_rig):
+        for obj in bpy.data.objects:
+            obj.select_set(False)
+        mb_rig.select_set(True)
+        bpy.context.view_layer.objects.active = mb_rig
+        bpy.ops.object.mode_set(mode='POSE')
+        head_bone = None
+        msg = "Success"
+        try:
+            head_bone = bpy.context.object.pose.bones['head']
+        except:
+            msg = "no head bone found"
+            return None, msg
+
+        return head_bone, msg
+
     def set_keyframes(self, result, array, slider_obj, intensity, vgi, hgi):
         global global_sliders
 
@@ -84,7 +104,7 @@ class FACE_OT_animate(bpy.types.Operator):
                 value = (result[m] / 5) * 0.377
             else:
                 # normalize the gaze values to fit in the -0.189 - 0.189
-                # values of the gaze slider
+                # range of the gaze slider
                 # TODO: if we're going to fit that with other rig systems
                 # we need to be a bit smarter than this.
                 value = result[m]
@@ -129,7 +149,7 @@ class FACE_OT_animate(bpy.types.Operator):
                 slider_obj.keyframe_insert(data_path="location", frame=frame, index=0)
             frame = frame + 1
 
-    def animate_face(self, mouth, animation_data, intensity, vgi, hgi):
+    def animate_face(self, mouth, head, animation_data, intensity, vgi, hgi):
         global global_sliders_set
 
         # animation already done
@@ -143,30 +163,53 @@ class FACE_OT_animate(bpy.types.Operator):
             if key.strip('_r') in mouth_aus and not mouth:
                 continue
 
+            if 'pose_' in key and not head:
+                continue
+
             slider_name = ''
+            head_animation = False
             if 'AU' in key:
                 slider_name = 'facs_rig_slider_' + key.strip('_r')
             elif key == 'gaze_angle_x':
                 slider_name = 'facs_rig_slider_GZ0H'
             elif key == 'gaze_angle_y':
                 slider_name = 'facs_rig_slider_GZ0V'
+            elif 'pose_R' in key:
+                # only look at the head rotation for now
+                head_animation = True
             else:
-                continue
-
-            global_sliders[slider_name] = []
-
-            slider_obj = bpy.data.objects.get(slider_name)
-            if not slider_obj:
-                logger.critical('slider %s not found', slider_name)
                 continue
 
             result = value[0]
             maximas = value[1]
             minimas = value[2]
 
-            self.set_keyframes(result, maximas, slider_obj, intensity, vgi, hgi)
-            self.set_keyframes(result, minimas, slider_obj, intensity, vgi, hgi)
-            #self.set_every_keyframe(result, slider_obj, intensity, vgi, hgi)
+            slider_obj = None
+            mb_rig = None
+            if head_animation:
+                mb_rig = get_mb_rig()
+                if not mb_rig:
+                    msg = "no MB rig found"
+                    logger.critical(msg)
+                    self.report({'ERROR'}, msg)
+                    return
+                head_bone, msg = self.get_head_bone(mb_rig)
+                if not head_bone:
+                    logger.critical(msg)
+                    self.report({'ERROR'}, msg)
+                    return
+                self.set_keyframes_hr(result, maximas, key.strip('pose_'), head_bone, intensity)
+                self.set_keyframes_hr(result, minimas, key.strip('pose_'), head_bone, intensity)
+            else:
+                global_sliders[slider_name] = []
+                slider_obj = bpy.data.objects.get(slider_name)
+                if not slider_obj:
+                    logger.critical('slider %s not found', slider_name)
+                    continue
+
+                self.set_keyframes(result, maximas, slider_obj, intensity, vgi, hgi)
+                self.set_keyframes(result, minimas, slider_obj, intensity, vgi, hgi)
+                #self.set_every_keyframe(result, slider_obj, intensity, vgi, hgi)
 
         global_sliders_set = True
 
@@ -204,6 +247,7 @@ class FACE_OT_animate(bpy.types.Operator):
         hgi = scn.yafr_openface_hgaze_intensity
         vgi = scn.yafr_openface_vgaze_intensity
         mouth = scn.yafr_openface_mouth
+        head = scn.yafr_openface_head
 
         if global_sliders_set:
             self.report({'ERROR'}, "Delete current animation first")
@@ -224,15 +268,18 @@ class FACE_OT_animate(bpy.types.Operator):
         # csv file provided use that instead of the video file
         if csv:
             if not os.path.isfile(csv):
-                msg = "bad csv file provided "+csv
-                logger.critical(msg)
-                self.report({'ERROR'}, msg)
-                return {'FINISHED'}
+                if not os.path.isfile(dirname+csv):
+                    msg = "bad csv file provided "+csv
+                    logger.critical(msg)
+                    self.report({'ERROR'}, msg)
+                    return {'FINISHED'}
+                else:
+                    csv = dirname+csv
 
             animation_data = self.process_csv_file(csv, ws, po)
             # animate the data
             if animation_data:
-                self.animate_face(mouth, animation_data, intensity, vgi, hgi)
+                self.animate_face(mouth, head, animation_data, intensity, vgi, hgi)
                 return {'FINISHED'}
 
             msg = "failed to animate face"
@@ -241,14 +288,23 @@ class FACE_OT_animate(bpy.types.Operator):
             return {'FINISHED'}
 
         # run openface on the videofile
+        # TODO: check if openface is an executable and videofile is a video
+        # file.
         if not os.path.isfile(openface):
-            msg = "Bad path to openFace: " + openface
-            self.report({'ERROR'}, msg)
-            return {'FINISHED'}
+            if not os.path.isfile(dirname+openface):
+                msg = "Bad path to openFace: " + openface
+                self.report({'ERROR'}, msg)
+                return {'FINISHED'}
+            else:
+                openface = dirname+openface
         if not os.path.isfile(video):
-            msg = "Bad path to video file: " + video
-            self.report({'ERROR'}, 'Bad path to video file')
-            return {'FINISHED'}
+            # try another tac
+            if not os.path.isfile(dirname+video):
+                msg = "Bad path to video file: " + video
+                self.report({'ERROR'}, 'Bad path to video file')
+                return {'FINISHED'}
+            else:
+                video = dirname+video
 
         outdir = ''
         try:
@@ -274,7 +330,7 @@ class FACE_OT_animate(bpy.types.Operator):
         animation_data = self.process_csv_file(csv, ws, po)
         # animate the data
         if animation_data:
-            self.animate_face(mouth, animation_data, intensity, vgi, hgi)
+            self.animate_face(mouth, head, animation_data, intensity, vgi, hgi)
             return {'FINISHED'}
 
         msg = "failed to animate face"
@@ -309,6 +365,7 @@ class VIEW3D_PT_tools_openface(bpy.types.Panel):
         col.label(text="Horizontal Gaze Intensity")
         col.prop(scn, "yafr_openface_hgaze_intensity", text='')
         col.prop(scn, "yafr_openface_mouth", text='Mouth Animation')
+        col.prop(scn, "yafr_openface_head", text='Head Animation')
         col = layout.column(align=False)
         col.operator('yafr.animate_face', icon='ANIM_DATA')
         col = layout.column(align=False)

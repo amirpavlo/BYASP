@@ -93,6 +93,11 @@ def register():
         description="Enable mouth animation",
         default=True)
 
+    bpy.types.Scene.yafr_openface_head = BoolProperty(
+        name="Enable Head",
+        description="Enable head animation",
+        default=True)
+
     bpy.types.Scene.yasp_phoneme_rig = StringProperty(
         name="Phoneme Rig Name",
         subtype='FILE_NAME',

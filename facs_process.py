@@ -14,7 +14,7 @@ import matplotlib.pyplot as plt
 # https://facsvatar.readthedocs.io/en/latest/defaultsetup.html
 #
 
-animation_data = {'frame': [[], [], []], 'timestamp': [[], [], []], 'AU01_r': [[], [], []], 'AU02_r': [[], [], []], 'AU04_r': [[], [], []], 'AU05_r': [[], [], []], 'AU06_r': [[], [], []], 'AU07_r': [[], [], []], 'AU09_r': [[], [], []], 'AU10_r': [[], [], []], 'AU12_r': [[], [], []], 'AU14_r': [[], [], []], 'AU15_r': [[], [], []], 'AU17_r': [[], [], []], 'AU20_r': [[], [], []], 'AU23_r': [[], [], []], 'AU25_r': [[], [], []], 'AU26_r': [[], [], []], 'AU45_r': [[], [], []], 'gaze_0_x': [[], [], []], 'gaze_0_y': [[], [], []], 'gaze_0_z': [[], [], []], 'gaze_1_x': [[], [], []], 'gaze_1_y': [[], [], []], 'gaze_1_z': [[], [], []], 'gaze_angle_x': [[], [], []], 'gaze_angle_y': [[], [], []], 'pose_Tx': [[], [], []], 'pose_Tx': [[], [], []], 'pose_Tz': [[], [], []], 'pose_Rx': [[], [], []], 'pose_Rx': [[], [], []], 'pose_Rz': [[], [], []]}
+animation_data = {'frame': [[], [], []], 'timestamp': [[], [], []], 'AU01_r': [[], [], []], 'AU02_r': [[], [], []], 'AU04_r': [[], [], []], 'AU05_r': [[], [], []], 'AU06_r': [[], [], []], 'AU07_r': [[], [], []], 'AU09_r': [[], [], []], 'AU10_r': [[], [], []], 'AU12_r': [[], [], []], 'AU14_r': [[], [], []], 'AU15_r': [[], [], []], 'AU17_r': [[], [], []], 'AU20_r': [[], [], []], 'AU23_r': [[], [], []], 'AU25_r': [[], [], []], 'AU26_r': [[], [], []], 'AU45_r': [[], [], []], 'gaze_0_x': [[], [], []], 'gaze_0_y': [[], [], []], 'gaze_0_z': [[], [], []], 'gaze_1_x': [[], [], []], 'gaze_1_y': [[], [], []], 'gaze_1_z': [[], [], []], 'gaze_angle_x': [[], [], []], 'gaze_angle_y': [[], [], []], 'pose_Tx': [[], [], []], 'pose_Ty': [[], [], []], 'pose_Tz': [[], [], []], 'pose_Rx': [[], [], []], 'pose_Ry': [[], [], []], 'pose_Rz': [[], [], []]}
 
 def smooth_array(ar, window_size, polyorder):
     # use savgol_filter() to do first path on smooth
@@ -74,7 +74,10 @@ def process_facs_csv(csv_name, window_size = 5, polyorder = 2):
         for k, v in animation_data.items():
             if k == 'frame' or k == 'timestamp':
                 continue
-            animation_data[k][0], animation_data[k][1], animation_data[k][2] = smooth_array(v[0], window_size, polyorder)
+            if 'pose_' in k:
+                animation_data[k][0], animation_data[k][1], animation_data[k][2] = smooth_array(v[0], 11, 5)
+            else:
+                animation_data[k][0], animation_data[k][1], animation_data[k][2] = smooth_array(v[0], window_size, polyorder)
 
         # export data to JSON
         js = json.dumps(animation_data, indent=4)
