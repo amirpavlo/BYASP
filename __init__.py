@@ -47,8 +47,11 @@ classes = (
     byasp.YASP_OT_deleteallKeyframes,
     byasp.YASP_OT_delete_seq,
     bface.VIEW3D_PT_tools_openface,
+    bface.VIEW3D_PT_pdm2d_openface,
     bface.FACE_OT_animate,
     bface.FACE_OT_clear_animation,
+    bface.FACE_OT_pdm2d_del_animate,
+    bface.FACE_OT_pdm2d_animate,
 )
 
 def register():
@@ -97,6 +100,16 @@ def register():
         name="Enable Head",
         description="Enable head animation",
         default=True)
+
+    bpy.types.Scene.yafr_pdm_2d = BoolProperty(
+        name="2D Plotting",
+        description="plot 2D data",
+        default=True)
+
+    bpy.types.Scene.yafr_pdm_plot_all = BoolProperty(
+        name="plot every point",
+        description="plot all the data provided",
+        default=False)
 
     bpy.types.Scene.yasp_phoneme_rig = StringProperty(
         name="Phoneme Rig Name",

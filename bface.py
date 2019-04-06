@@ -12,6 +12,7 @@ import platform
 import random
 import math
 import subprocess
+import datetime
 from bpy.props import EnumProperty, StringProperty, BoolVectorProperty
 from . import facs_process as facs
 
@@ -21,11 +22,14 @@ logger = logging.getLogger(__name__)
 global_sliders_set = False
 global_sliders = {}
 init_state = False
+plot_all = False
 
 def set_init_state(state):
     global init_state
 
     init_state = state
+    if init_state:
+        facs.init_database()
 
 class FACE_OT_clear_animation(bpy.types.Operator):
     bl_idname = "yafr.del_animation"
@@ -56,6 +60,20 @@ def get_mb_rig():
             return obj
     return None
 
+def process_csv_file(csv, ws, po):
+    try:
+        js = facs.process_openface_csv(csv, ws, po)
+    except Exception as e:
+        msg = 'failed to process results\n'+traceback.format_exc()
+        logger.critical(msg)
+        return False, msg
+
+    if not js:
+        msg = 'Failed to process results'
+        return False, msg
+
+    return True, 'Success'
+
 class FACE_OT_animate(bpy.types.Operator):
     bl_idname = "yafr.animate_face"
     bl_label = "Animate Face"
@@ -77,7 +95,6 @@ class FACE_OT_animate(bpy.types.Operator):
             # angle in radians
             val = result[m] + (result[m] * intensity)
             head_bone.rotation_quaternion[rotation[attr]] = val
-            print(attr, ":", m, ":",  rotation[attr], ":", val)
             head_bone.keyframe_insert('rotation_quaternion', index=rotation[attr], frame=m)
 
     def get_head_bone(self, mb_rig):
@@ -180,9 +197,9 @@ class FACE_OT_animate(bpy.types.Operator):
             else:
                 continue
 
-            result = value[0]
-            maximas = value[1]
-            minimas = value[2]
+            result = value[facs.VALUES]
+            maximas = value[facs.MAXIMAS]
+            minimas = value[facs.MINIMAS]
 
             slider_obj = None
             mb_rig = None
@@ -212,24 +229,6 @@ class FACE_OT_animate(bpy.types.Operator):
                 #self.set_every_keyframe(result, slider_obj, intensity, vgi, hgi)
 
         global_sliders_set = True
-
-    def process_csv_file(self, csv, ws, po):
-        animation_data = None
-
-        try:
-            js, animation_data = facs.process_facs_csv(csv, ws, po)
-        except Exception as e:
-            logger.critical(e)
-            msg = 'failed to process results\n'+traceback.format_exc()
-            self.report({'ERROR'}, msg)
-            return None
-
-        if not js:
-            self.report({'ERROR'}, 'Failed to process results')
-            return None
-
-        return animation_data
-
 
     def execute(self, context):
         global global_sliders_set
@@ -276,14 +275,13 @@ class FACE_OT_animate(bpy.types.Operator):
                 else:
                     csv = dirname+csv
 
-            animation_data = self.process_csv_file(csv, ws, po)
+            rc, msg = process_csv_file(csv, ws, po)
             # animate the data
-            if animation_data:
-                self.animate_face(mouth, head, animation_data, intensity, vgi, hgi)
+            if rc:
+                facs_data = facs.get_facs_data()
+                self.animate_face(mouth, head, facs_data, intensity, vgi, hgi)
                 return {'FINISHED'}
 
-            msg = "failed to animate face"
-            logger.critical(msg)
             self.report({'ERROR'}, msg)
             return {'FINISHED'}
 
@@ -327,15 +325,198 @@ class FACE_OT_animate(bpy.types.Operator):
             return {'FINISHED'}
 
         # animate the data
-        animation_data = self.process_csv_file(csv, ws, po)
+        rc, msg = process_csv_file(csv, ws, po)
         # animate the data
-        if animation_data:
-            self.animate_face(mouth, head, animation_data, intensity, vgi, hgi)
+        if rc:
+            facs_data = facs.get_facs_data()
+            self.animate_face(mouth, head, facs_data, intensity, vgi, hgi)
+            frame_end = facs_data['frame'][facs.VALUES][-1]
+            bpy.context.scene.frame_end = frame_end
             return {'FINISHED'}
 
-        msg = "failed to animate face"
-        logger.critical(msg)
         self.report({'ERROR'}, msg)
+        return {'FINISHED'}
+
+class FACE_OT_pdm2d_del_animate(bpy.types.Operator):
+    bl_idname = "yafr.del_pdm2d_animation"
+    bl_label = "PDM Delete"
+    bl_description = "Experimental feature"
+
+    def execute(self, context):
+        for obj in bpy.data.objects:
+            obj.select_set(False)
+
+        for obj in bpy.data.objects:
+            if 'pdm2d_' in obj.name or 'pdm3d_' in obj.name:
+                obj.animation_data_clear()
+                bpy.context.view_layer.objects.active = obj
+                obj.select_set(True)
+                bpy.ops.object.delete(use_global=True)
+        return {'FINISHED'}
+
+class FACE_OT_pdm2d_animate(bpy.types.Operator):
+    bl_idname = "yafr.animate_pdm2d_face"
+    bl_label = "PDM Plotting"
+    bl_description = "Experimental feature"
+
+    def plot_axis(self, obj, axis, result, array, div=800):
+        if plot_all:
+            f = 0
+            for p in result:
+                value = p / div
+                if axis == 1 or axis == 2:
+                    value = value * -1
+                obj.location[axis] = value
+                obj.keyframe_insert(data_path="location", frame=f, index=axis)
+                f = f+1
+            return
+        for m in array:
+            value = result[m] / div
+            if axis == 1 or axis == 2:
+                value = value * -1
+            obj.location[axis] = value
+            obj.keyframe_insert(data_path="location", frame=m, index=axis)
+
+    def animate_2d_empty(self, obj, attr, pdm_2d):
+        y_name = 'y_'+attr.strip('x_')
+
+        x_info = pdm_2d[attr]
+        y_info = pdm_2d[y_name]
+
+        self.plot_axis(obj, 0, x_info[facs.VALUES], x_info[facs.MAXIMAS])
+        if not plot_all:
+            self.plot_axis(obj, 0, x_info[facs.VALUES], x_info[facs.MINIMAS])
+        self.plot_axis(obj, 1, y_info[facs.VALUES], x_info[facs.MAXIMAS])
+        if not plot_all:
+            self.plot_axis(obj, 1, y_info[facs.VALUES], x_info[facs.MINIMAS])
+
+    def animate_3d_empty(self, obj, attr, pdm_3d):
+        y_name = 'Y_'+attr.strip('X_')
+        z_name = 'Z_'+attr.strip('X_')
+        div = 40
+
+        x_info = pdm_3d[attr]
+        y_info = pdm_3d[y_name]
+        z_info = pdm_3d[z_name]
+
+        self.plot_axis(obj, 0, x_info[facs.VALUES],
+                       x_info[facs.MAXIMAS], div)
+        if not plot_all:
+            self.plot_axis(obj, 0, x_info[facs.VALUES],
+                           x_info[facs.MINIMAS], div)
+        self.plot_axis(obj, 1, y_info[facs.VALUES],
+                       x_info[facs.MAXIMAS], div)
+        if not plot_all:
+            self.plot_axis(obj, 1, y_info[facs.VALUES],
+                           x_info[facs.MINIMAS], div)
+        self.plot_axis(obj, 2, z_info[facs.VALUES],
+                       x_info[facs.MAXIMAS], div)
+        if not plot_all:
+            self.plot_axis(obj, 2, z_info[facs.VALUES],
+                           x_info[facs.MINIMAS], div)
+
+    def animate_pdm2d(self, pdm_2d):
+        # create all the empties
+        for k, v in pdm_2d.items():
+            if 'y_' in k or 'frame' in k or 'timestamp' in k:
+                continue
+            bpy.ops.object.empty_add(type='SPHERE', radius=0.01)
+            empty = bpy.context.view_layer.objects.active
+            empty.name = 'pdm2d_'+k.strip('x_')
+            # animate each empty
+            logger.critical('Start plotting %s: %s', k,
+                        str(datetime.datetime.now()))
+            self.animate_2d_empty(empty, k, pdm_2d)
+            # logger.critical('Finished plotting %s: %s', k,
+            #            str(datetime.datetime.now()))
+
+    def animate_pdm3d(self, pdm_3d):
+        # create all the empties
+        for k, v in pdm_3d.items():
+            if 'Y_' in k or 'Z_' in k or \
+               'frame' in k or 'timestamp' in k:
+                continue
+            bpy.ops.object.empty_add(type='SPHERE', radius=0.05)
+            empty = bpy.context.view_layer.objects.active
+            empty.name = 'pdm3d_'+k.strip('X_')
+            # animate each empty
+            logger.critical('Start plotting %s: %s', k,
+                        str(datetime.datetime.now()))
+            self.animate_3d_empty(empty, k, pdm_3d)
+            #logger.critical('Finished plotting %s: %s', k,
+            #            str(datetime.datetime.now()))
+
+    def execute(self, context):
+        global plot_all
+
+        scn = context.scene
+        dirname = os.path.dirname(os.path.realpath(__file__))
+        csv = scn.yafr_csvfile
+        ws = scn.yafr_openface_ws
+        po = scn.yafr_openface_polyorder
+        two_d = scn.yafr_pdm_2d
+        plot_all = scn.yafr_pdm_plot_all
+
+        set_init_state(False)
+
+        if po >= ws:
+            msg = "polyorder must be less than window_length."
+            logger.critical(msg)
+            self.report({'ERROR'}, msg)
+            return {'FINISHED'}
+
+        if ws % 2 == 0:
+            msg = "window size needs to be an odd number"
+            logger.critical(msg)
+            self.report({'ERROR'}, msg)
+            return {'FINISHED'}
+
+        if not csv:
+            self.report({'ERROR'}, 'No CSV file specified')
+            return {'FINISHED'}
+
+        if not os.path.isfile(csv):
+            if not os.path.isfile(dirname+csv):
+                msg = "bad csv file provided "+csv
+                logger.critical(msg)
+                self.report({'ERROR'}, msg)
+                return {'FINISHED'}
+            else:
+                csv = dirname+csv
+
+        # reset and reload the data base
+        facs.reset_database()
+
+        logger.critical('Start processing CSV: %s',
+                    str(datetime.datetime.now()))
+        rc, msg = process_csv_file(csv, ws, po)
+        logger.critical('Finished processing CSV: %s',
+                    str(datetime.datetime.now()))
+        # animate the data
+        if not rc:
+            self.report({'ERROR'}, msg)
+            return {'FINISHED'}
+        if two_d:
+            logger.critical('Start plotting 2D: %s',
+                        str(datetime.datetime.now()))
+            pdm2d_data = facs.get_pdm2d_data()
+            self.animate_pdm2d(pdm2d_data)
+            logger.critical('Finished plotting 2D: %s',
+                        str(datetime.datetime.now()))
+        else:
+            logger.critical('Start plotting 3D: %s',
+                        str(datetime.datetime.now()))
+            pdm3d_data = facs.get_pdm3d_data()
+            self.animate_pdm3d(pdm3d_data)
+            logger.critical('Finished plotting 3D: %s',
+                        str(datetime.datetime.now()))
+
+        if two_d:
+            frame_end = pdm2d_data['frame'][facs.VALUES][-1]
+        else:
+            frame_end = pdm3d_data['frame'][facs.VALUES][-1]
+        bpy.context.scene.frame_end = frame_end
+
         return {'FINISHED'}
 
 class VIEW3D_PT_tools_openface(bpy.types.Panel):
@@ -370,5 +551,24 @@ class VIEW3D_PT_tools_openface(bpy.types.Panel):
         col.operator('yafr.animate_face', icon='ANIM_DATA')
         col = layout.column(align=False)
         col.operator('yafr.del_animation', icon='DECORATE_ANIMATE')
+
+class VIEW3D_PT_pdm2d_openface(bpy.types.Panel):
+    bl_label = "PDM Experimental"
+    bl_space_type = "VIEW_3D"
+    bl_region_type = "UI"
+    bl_category = "YAFR"
+    #bl_options = {'DEFAULT_CLOSED'}
+
+    def draw(self, context):
+        scn = context.scene
+        layout = self.layout
+        wm = context.window_manager
+        col = layout.column(align=True)
+        col.label(text="Experimental")
+        col.prop(scn, "yafr_pdm_2d", text='2D Plotting')
+        col.prop(scn, "yafr_pdm_plot_all", text='Plot All')
+        col.operator('yafr.animate_pdm2d_face', icon='ANIM_DATA')
+        col = layout.column(align=False)
+        col.operator('yafr.del_pdm2d_animation', icon='DECORATE_ANIMATE')
 
 
