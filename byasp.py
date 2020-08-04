@@ -349,9 +349,13 @@ class Sequence(object):
             self.set_keyframe(m, pm, idx)
 
     def del_all_keyframes(self):
+        scn = bpy.context.scene
         for k, bone in self.bones.items():
             bone.del_keyframes()
-        phoneme_rig = bpy.data.objects.get('MBLab_skeleton_phoneme_rig')
+        if not scn.yasp_phoneme_rig:
+            phoneme_rig = bpy.data.objects.get('MBLab_skeleton_phoneme_rig')
+        else:
+            phoneme_rig = bpy.data.objects.get(scn.yasp_phoneme_rig)
         phoneme_rig.animation_data_clear()
 
     def del_keyframe(self, frame):

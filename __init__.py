@@ -50,13 +50,20 @@ classes = (
     bface.VIEW3D_PT_pdm2d_openface,
     bface.FACE_OT_animate,
     bface.FACE_OT_clear_animation,
-    bface.FACE_OT_pdm2d_del_animate,
+    bface.FACE_OT_pdm_del_animate,
     bface.FACE_OT_pdm2d_animate,
+    bface.FACE_OT_pdm3d_rm_rotation,
 )
 
 def register():
     for cls in classes:
         bpy.utils.register_class(cls)
+
+    bpy.types.Scene.yafr_facs_rig = StringProperty(
+        name="FACS Rig name",
+        subtype='FILE_NAME',
+        default='',
+        description='name of FACS rig')
 
     bpy.types.Scene.yafr_videofile = StringProperty(
         name="Path to video face reference",
@@ -69,6 +76,11 @@ def register():
         subtype='FILE_PATH',
         default='',
         description='path to FACS .csv file')
+
+    bpy.types.Scene.yafr_start_frame = IntProperty(
+        name="Start Frame",
+        default = 0,
+        description='Animation start frame')
 
     bpy.types.Scene.yafr_openface_ws = IntProperty(
         name="Window Size",
